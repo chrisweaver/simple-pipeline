@@ -1,0 +1,92 @@
+# ==============================================================================
+# variables.tf
+# ==============================================================================
+
+variable "aws_region" {
+  description = "Deployment environment to deploy into"
+  type        = string
+  default     = "us-east-1"
+
+  validation {
+    condition     = contains(["us-east-1", "us-east-2"], var.aws_region)
+    error_message = "aws_region must be us-east-1 or us-east-2"
+  }
+}
+
+variable "agency" {
+  description = "COV Agency that owns the resources"
+  type        = string
+  default     = "dbhds"
+}
+
+variable "team_app_name" {
+  description = "Name of agency application that owns the resource, used as a prefix for all resources"
+  type        = string
+
+  validation {
+    condition     = can(regex("^[a-zA-Z0-9-_]+$", var.team_app_name))
+    error_message = "team_app_name must be alphanumeric with hyphens or underscores"
+  }
+}
+
+variable "environment" {
+  description = "Environment for deployment"
+  type        = string
+  default     = "dev"
+
+  validation {
+    condition     = contains(["dev", "test", "uat", "prod"], var.environment)
+    error_message = "environment must be dev, test, uat, or prod"
+  }
+}
+
+variable "scope" {
+  description = "Scope or description of the resource"
+  type        = string
+}
+
+# ── Source Repository ──────────────────────────────────────────────────────────
+
+variable "source_provider" {
+  description = "CodeStar connection provider type"
+  type        = string
+  default     = "GitHub"
+}
+
+variable "repo_org" {
+  description = "git repository org"
+  type        = string
+  # default = TODO
+}
+
+variable "repo_name" {
+  description = "git repository name"
+  type        = string
+}
+
+variable "repo_branch" {
+  description = "Branch that triggers the pipeline"
+  type        = string
+  default     = "main"
+}
+
+# CodeBuild
+
+variable "source_codeconnections_arn" {
+  description = "ARN of the CodeStar / Codeconnections connection for the source repository"
+  type        = string
+}
+
+# ── Lambda ─────────────────────────────────────────────────────────────────────
+
+variable "lambda_runtime" {
+  description = "Lambda runtime identifier"
+  type        = string
+  default     = "nodejs20.x"
+}
+
+variable "lambda_handler" {
+  description = "Lambda handler in 'file.function' format"
+  type        = string
+  default     = "index.handler"
+}

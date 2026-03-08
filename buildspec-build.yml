@@ -1,0 +1,41 @@
+# buildspec/buildspec-build.yml
+# Runs during the BUILD stage of the pipeline.
+# Customize the install/build commands for your runtime.
+
+version: 0.2
+
+phases:
+  install:
+    runtime-versions:
+      nodejs: 20
+    commands:
+      - echo "Installing dependencies..."
+      - npm ci --prefer-offline
+
+  pre_build:
+    commands:
+      - echo "Pre-build checks..."
+      - node --version
+      - npm --version
+
+  build:
+    commands:
+      - echo "Building application..."
+      - npm run build   # replace with your actual build command
+
+  post_build:
+    commands:
+      - echo "Packaging Lambda deployment artifact..."
+      # Zip only the files needed for Lambda (exclude tests, dev deps, etc.)
+      - zip -r lambda-deployment.zip dist/ node_modules/ package.json
+      - echo "Build complete."
+
+artifacts:
+  files:
+    - lambda-deployment.zip
+    - buildspec/**/*
+  discard-paths: no
+
+cache:
+  paths:
+    - node_modules/**/*
