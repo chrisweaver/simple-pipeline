@@ -1,5 +1,5 @@
 """
-src/handler.py
+depositor/handler.py
 --------------
 Lambda function that deposits a timestamped JSON file into an S3 bucket.
 

@@ -38,7 +38,7 @@ phases:
       # Coverage report (informational — does not gate the build)
       - |
         python -m pytest tests/ \
-          --cov=src \
+          --cov=depositor \
           --cov-report=term-missing \
           --cov-report=xml:test-results/coverage.xml \
           --quiet || true
