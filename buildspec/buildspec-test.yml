@@ -13,16 +13,20 @@ phases:
     commands:
       - pip install --upgrade pip --quiet
       #- pip install -r requirements.txt -r requirements-dev.txt --quiet
-      - pip install -r requirements.txt --quiet
+      - echo "=== wtf am I"
+      - pwd
 
   pre_build:
     commands:
-      - echo "=== Running tests ==="
       - mkdir -p test-results
 
   build:
     commands:
       # Unit tests
+      - echo "=== Installing runtime dependencies ==="
+      - pwd
+      - pip install -r requirements.txt
+      - echo "=== Running tests ==="
       - |
         python -m pytest tests/ \
           --junitxml=test-results/unit.xml \
