@@ -35,9 +35,10 @@ phases:
 
 artifacts:
   files:
+    - requirements.txt
     - lambda-deployment.zip
     - buildspec/**/*
-    - requirements.txt
+    - tests/**/*
   discard-paths: no
 
 cache:
