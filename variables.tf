@@ -82,11 +82,22 @@ variable "source_codeconnections_arn" {
 variable "lambda_runtime" {
   description = "Lambda runtime identifier"
   type        = string
-  default     = "nodejs20.x"
+  default     = "python3.12"
+}
+variable "lambda_handler" {
+  description = "Lambda handler in 'module.function' format"
+  type        = string
+  default     = "handler.handler"
 }
 
-variable "lambda_handler" {
-  description = "Lambda handler in 'file.function' format"
-  type        = string
-  default     = "index.handler"
+variable "lambda_timeout" {
+  description = "Lambda timeout in seconds"
+  type        = number
+  default     = 30
+}
+
+variable "lambda_memory" {
+  description = "Lambda memory in MB"
+  type        = number
+  default     = 128
 }

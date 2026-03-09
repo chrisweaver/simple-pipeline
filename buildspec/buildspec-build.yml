@@ -1,34 +1,37 @@
 # buildspec/buildspec-build.yml
-# Runs during the BUILD stage of the pipeline.
-# Customize the install/build commands for your runtime.
+# BUILD STAGE
+# Installs Python dependencies, runs linting, and packages the Lambda zip.
+# Output: lambda-deployment.zip (contains handler + site-packages)
 
 version: 0.2
 
 phases:
   install:
     runtime-versions:
-      nodejs: 20
+      python: 3.12
     commands:
-      - echo "Installing dependencies..."
-      - npm ci --prefer-offline
+      - pip install --upgrade pip
 
   pre_build:
     commands:
-      - echo "Pre-build checks..."
-      - node --version
-      - npm --version
+      - echo "=== Linting ==="
+      - pip install flake8 --quiet
+      - flake8 src/ --max-line-length=120 --exclude=__pycache__
+      - echo "=== Lint passed ==="
 
   build:
     commands:
-      - echo "Building application..."
-      - npm run build   # replace with your actual build command
+      - echo "=== Installing runtime dependencies ==="
+      - pip install -r requirements.txt -t package/ --quiet
+      - echo "=== Packaging Lambda zip ==="
+      - cp -r src/* package/
+      - cd package && zip -r ../lambda-deployment.zip . -x "*.pyc" -x "*/__pycache__/*"
+      - cd ..
+      - echo "=== Package size ===" && du -sh lambda-deployment.zip
 
   post_build:
     commands:
-      - echo "Packaging Lambda deployment artifact..."
-      # Zip only the files needed for Lambda (exclude tests, dev deps, etc.)
-      - zip -r lambda-deployment.zip dist/ node_modules/ package.json
-      - echo "Build complete."
+      - echo "Build complete at $(date)"
 
 artifacts:
   files:
@@ -38,4 +41,4 @@ artifacts:
 
 cache:
   paths:
-    - node_modules/**/*
+    - /root/.cache/pip/**/*

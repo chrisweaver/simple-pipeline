@@ -1,16 +1,56 @@
+# Configure providers
+provider "aws" {
+  region = var.aws_region
+}
+
+# ------------------------------------------------------------------------------
+# Data Sources
+# ------------------------------------------------------------------------------
+data "aws_caller_identity" "current" {}
+data "aws_partition" "current" {}
+
+# Placeholder zip — Terraform needs an initial artifact to create the Lambda.
+# CodePipeline will overwrite this on every successful deploy.
+data "archive_file" "lambda_placeholder" {
+  type        = "zip"
+  output_path = "${path.module}/.placeholder.zip"
+
+  source {
+    content  = <<-PYTHON
+      import json, os, boto3, datetime
+
+      def handler(event, context):
+          bucket = os.environ["TARGET_BUCKET"]
+          key    = f"deposits/{datetime.datetime.utcnow().isoformat()}.json"
+          boto3.client("s3").put_object(
+              Bucket=bucket,
+              Key=key,
+              Body=json.dumps({"status": "placeholder", "event": event}),
+              ContentType="application/json",
+          )
+          return {"statusCode": 200, "key": key}
+    PYTHON
+    filename = "handler.py"
+  }
+}
+
+# ------------------------------------------------------------------------------
 # Local variables
+# ------------------------------------------------------------------------------
 locals {
+  # All four environments
+  #all_envs = ["dev", "test", "uat", "prod"]
+  all_envs = ["dev"]
+
+  account_id = data.aws_caller_identity.current.account_id
+  partition  = data.aws_partition.current.partition
+
   common_tags = {
     Agency      = var.agency
     Project     = var.team_app_name
     Environment = var.environment
     ManagedBy   = "Terraform"
   }
-}
-
-# Configure providers
-provider "aws" {
-  region = var.aws_region
 }
 
 # Create a random string for bucket suffix
@@ -26,7 +66,7 @@ resource "random_string" "bucket_uid" {
 # ------------------------------------------------------------------------------
 resource "aws_s3_bucket" "artifacts" {
   #bucket = "${var.agency}-${var.team_app_name}-${var.environment}-${var.scope}-bucket-${random_string.bucket_uid.result}"
-  #bucket = "${var.team_app_name}-artifacts-${data.aws_caller_identity.current.account_id}"
+  #bucket = "${var.team_app_name}-artifacts-${local.account_id}"
   bucket = "${var.agency}-${var.team_app_name}-${var.environment}-artifacts-bucket-${random_string.bucket_uid.result}"
   force_destroy = true
 
@@ -75,13 +115,10 @@ resource "aws_lambda_function" "app" {
   function_name = "${var.team_app_name}-function"
   role          = aws_iam_role.lambda_exec.arn
   runtime       = var.lambda_runtime
-  handler       = var.lambda_handler
-  timeout       = 30
-  memory_size   = 128
-
-  # Placeholder ZIP so Terraform can create the function on first apply.
-  # CodePipeline will overwrite it on every successful deploy.
-  filename      = data.archive_file.lambda_placeholder.output_path
+  handler          = var.lambda_handler
+  timeout          = var.lambda_timeout
+  memory_size      = var.lambda_memory
+  filename         = data.archive_file.lambda_placeholder.output_path
   source_code_hash = data.archive_file.lambda_placeholder.output_base64sha256
 
   environment {
@@ -295,22 +332,6 @@ resource "aws_cloudwatch_log_group" "codebuild_test" {
 }
 
 # ------------------------------------------------------------------------------
-# Data Sources
-# ------------------------------------------------------------------------------
-data "aws_caller_identity" "current" {}
-data "aws_partition" "current" {}
-
-data "archive_file" "lambda_placeholder" {
-  type        = "zip"
-  output_path = "${path.module}/placeholder.zip"
-
-  source {
-    content  = "exports.handler = async () => ({ statusCode: 200, body: 'placeholder' });"
-    filename = "index.js"
-  }
-}
-
-# ------------------------------------------------------------------------------
 # IAM
 # ------------------------------------------------------------------------------
 
@@ -487,7 +508,7 @@ data "aws_iam_policy_document" "codebuild_permissions" {
       "codebuild:BatchPutCodeCoverages",
     ]
     resources = [
-      "arn:${data.aws_partition.current.partition}:codebuild:${var.aws_region}:${data.aws_caller_identity.current.account_id}:report-group/${var.team_app_name}-*"
+      "arn:${local.partition}:codebuild:${var.aws_region}:${local.account_id}:report-group/${var.team_app_name}-*"
     ]
   }
 }
@@ -512,5 +533,5 @@ data "aws_iam_policy_document" "lambda_assume" {
 
 resource "aws_iam_role_policy_attachment" "lambda_basic_execution" {
   role       = aws_iam_role.lambda_exec.name
-  policy_arn = "arn:${data.aws_partition.current.partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+  policy_arn = "arn:${local.partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 }

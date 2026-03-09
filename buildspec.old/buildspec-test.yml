@@ -1,0 +1,46 @@
+# buildspec/buildspec-test.yml
+# Runs during the TEST stage of the pipeline.
+# Expects build_output artifacts (including the built zip) as input.
+
+version: 0.2
+
+phases:
+  install:
+    runtime-versions:
+      nodejs: 20
+    commands:
+      - echo "Installing test dependencies..."
+      - npm ci --prefer-offline
+
+  pre_build:
+    commands:
+      - echo "Validating build artifact exists..."
+      - test -f lambda-deployment.zip || (echo "ERROR: lambda-deployment.zip not found" && exit 1)
+
+  build:
+    commands:
+      - echo "Running unit tests..."
+      - npm test
+
+      - echo "Running integration tests..."
+      - npm run test:integration   # add this script to package.json if needed
+
+  post_build:
+    commands:
+      - echo "All tests passed."
+
+reports:
+  # CodeBuild will publish these results to the console and mark the build
+  # as failed automatically if any tests fail.
+  unit-test-report:
+    files:
+      - "**/*"
+    base-directory: test-results
+    file-format: JUNITXML   # or CUCUMBERJSON, VISUALSTUDIOTRX, etc.
+    discard-paths: false
+
+artifacts:
+  # Pass through everything received so the Deploy stage can use the zip
+  files:
+    - "**/*"
+  discard-paths: no

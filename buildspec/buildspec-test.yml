@@ -1,46 +1,67 @@
 # buildspec/buildspec-test.yml
-# Runs during the TEST stage of the pipeline.
-# Expects build_output artifacts (including the built zip) as input.
+# TEST STAGE
+# Runs the full pytest suite (unit + integration).
+# Results are published to CodeBuild as a JUnit XML report.
+# The stage fails if any test fails — blocking downstream deploy stages.
 
 version: 0.2
 
 phases:
   install:
     runtime-versions:
-      nodejs: 20
+      python: 3.12
     commands:
-      - echo "Installing test dependencies..."
-      - npm ci --prefer-offline
+      - pip install --upgrade pip --quiet
+      - pip install -r requirements.txt -r requirements-dev.txt --quiet
 
   pre_build:
     commands:
-      - echo "Validating build artifact exists..."
-      - test -f lambda-deployment.zip || (echo "ERROR: lambda-deployment.zip not found" && exit 1)
+      - echo "=== Running tests ==="
+      - mkdir -p test-results
 
   build:
     commands:
-      - echo "Running unit tests..."
-      - npm test
+      # Unit tests
+      - |
+        python -m pytest tests/unit/ \
+          --junitxml=test-results/unit.xml \
+          --tb=short \
+          -v
 
-      - echo "Running integration tests..."
-      - npm run test:integration   # add this script to package.json if needed
+      # Integration tests (uses moto to mock AWS services — no real AWS calls)
+      - |
+        python -m pytest tests/integration/ \
+          --junitxml=test-results/integration.xml \
+          --tb=short \
+          -v
+
+      # Coverage report (informational — does not gate the build)
+      - |
+        python -m pytest tests/ \
+          --cov=src \
+          --cov-report=term-missing \
+          --cov-report=xml:test-results/coverage.xml \
+          --quiet || true
 
   post_build:
     commands:
-      - echo "All tests passed."
+      - echo "=== Test results ==="
+      - cat test-results/unit.xml        | grep -E 'tests=|failures=|errors='
+      - cat test-results/integration.xml | grep -E 'tests=|failures=|errors='
 
+# Publish JUnit reports to CodeBuild console
 reports:
-  # CodeBuild will publish these results to the console and mark the build
-  # as failed automatically if any tests fail.
   unit-test-report:
     files:
-      - "**/*"
-    base-directory: test-results
-    file-format: JUNITXML   # or CUCUMBERJSON, VISUALSTUDIOTRX, etc.
-    discard-paths: false
+      - test-results/unit.xml
+    file-format: JUNITXML
+  integration-test-report:
+    files:
+      - test-results/integration.xml
+    file-format: JUNITXML
 
+# Pass everything downstream so the deploy buildspecs can find the zip
 artifacts:
-  # Pass through everything received so the Deploy stage can use the zip
   files:
     - "**/*"
   discard-paths: no
