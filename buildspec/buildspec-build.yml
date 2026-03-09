@@ -37,6 +37,7 @@ artifacts:
   files:
     - lambda-deployment.zip
     - buildspec/**/*
+    - requirements.txt
   discard-paths: no
 
 cache:
