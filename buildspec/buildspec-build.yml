@@ -38,6 +38,7 @@ artifacts:
     - requirements.txt
     - lambda-deployment.zip
     - buildspec/**/*
+    - depositor/**/*
     - tests/**/*
   discard-paths: no
 
