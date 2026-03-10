@@ -228,7 +228,7 @@ resource "aws_codepipeline" "main" {
     type     = "S3"
   }
 
-  # Stage 1: Source
+  # Stage 1: Source/
   stage {
     name = "Source"
 
@@ -319,6 +319,12 @@ resource "aws_codepipeline" "main" {
 # ------------------------------------------------------------------------------
 # CloudWatch Log Groups
 # ------------------------------------------------------------------------------
+resource "aws_cloudwatch_log_group" "codepipeline" {
+  name              = "/aws/codepipeline/${var.team_app_name}-pipeline"
+  retention_in_days = 7
+  tags              = local.common_tags
+}
+
 resource "aws_cloudwatch_log_group" "codebuild_build" {
   name              = "/aws/codebuild/${var.team_app_name}-build"
   retention_in_days = 7
@@ -400,6 +406,20 @@ data "aws_iam_policy_document" "codepipeline_permissions" {
     ]
   }
 
+  # CloudWatch Logs
+  statement {
+    sid    = "CloudWatchLogs"
+    effect = "Allow"
+    actions = [
+      "logs:CreateLogGroup",
+      "logs:CreateLogStream",
+      "logs:PutLogEvents",
+    ]
+    resources = [
+      "${aws_cloudwatch_log_group.codepipeline.arn}:*"
+    ]
+  }
+
   # Lambda (deploy stage)
   statement {
     sid    = "LambdaDeploy"
@@ -408,6 +428,7 @@ data "aws_iam_policy_document" "codepipeline_permissions" {
       "lambda:InvokeFunction",
       "lambda:UpdateFunctionCode",
       "lambda:GetFunction",
+      "lambda:GetFunctionConfiguration",
       "lambda:PublishVersion",
       "lambda:UpdateAlias",
       "lambda:GetAlias",
