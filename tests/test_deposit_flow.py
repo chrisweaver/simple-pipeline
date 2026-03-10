@@ -8,6 +8,7 @@ as observed from the outside (S3 object presence, content, metadata).
 
 from __future__ import annotations
 
+import importlib
 import json
 import os
 import sys
@@ -20,11 +21,13 @@ from moto import mock_aws
 
 
 PACKAGE = "depositor"
+MODULE = "depositor"
 BUCKET = "integration-test-bucket"
 REGION = "us-east-1"
 
-# Ensure package is importable
+# Ensure package/module is importable
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", f"{PACKAGE}"))
+test_module = importlib.import_module(MODULE, package=PACKAGE)
 
 def _configure_aws_env():
     os.environ.update({
@@ -39,11 +42,10 @@ def _configure_aws_env():
 
 
 def _reload_handler():
-    for mod in list(sys.modules.keys()):
-        if mod in ("handler",):
-            del sys.modules[mod]
-    import handler as h
-    return h
+    """Reload module to get a clean execution environment.
+    """
+    importlib.reload(test_module)
+    return test_module.handler
 
 
 @mock_aws
@@ -63,27 +65,27 @@ class TestDepositFlow(unittest.TestCase):
 
     def test_deposit_object_exists_in_s3(self):
         """After invocation, the S3 object must be present and readable."""
-        result = self.handler.handler({"integration": True}, None)
+        result = self.handler({"integration": True}, None)
         key = result["key"]
 
         response = self.s3.get_object(Bucket=BUCKET, Key=key)
         assert response["ResponseMetadata"]["HTTPStatusCode"] == 200
 
     def test_deposit_body_is_valid_json(self):
-        result = self.handler.handler({}, None)
+        result = self.handler({}, None)
         obj = self.s3.get_object(Bucket=BUCKET, Key=result["key"])
         body = json.loads(obj["Body"].read())
         assert isinstance(body, dict)
 
     def test_deposit_body_has_correct_environment(self):
-        result = self.handler.handler({}, None)
+        result = self.handler({}, None)
         obj = self.s3.get_object(Bucket=BUCKET, Key=result["key"])
         body = json.loads(obj["Body"].read())
         assert body["environment"] == "test"
 
     def test_deposit_ids_are_consistent(self):
         """deposit_id in response == deposit_id in S3 body."""
-        result = self.handler.handler({}, None)
+        result = self.handler({}, None)
         obj = self.s3.get_object(Bucket=BUCKET, Key=result["key"])
         body = json.loads(obj["Body"].read())
         assert body["deposit_id"] == result["deposit_id"]
@@ -92,7 +94,7 @@ class TestDepositFlow(unittest.TestCase):
         """Ten sequential invocations should each create a distinct S3 object."""
         keys = set()
         for i in range(10):
-            r = self.handler.handler({"run": i}, None)
+            r = self.handler({"run": i}, None)
             keys.add(r["key"])
         assert len(keys) == 10
 
@@ -102,12 +104,12 @@ class TestDepositFlow(unittest.TestCase):
         assert keys.issubset(found_keys)
 
     def test_s3_metadata_environment_tag(self):
-        result = self.handler.handler({}, None)
+        result = self.handler({}, None)
         head = self.s3.head_object(Bucket=BUCKET, Key=result["key"])
         assert head["Metadata"].get("environment") == "test"
 
     def test_timestamp_is_utc_aware(self):
-        result = self.handler.handler({}, None)
+        result = self.handler({}, None)
         obj = self.s3.get_object(Bucket=BUCKET, Key=result["key"])
         body = json.loads(obj["Body"].read())
         from datetime import datetime

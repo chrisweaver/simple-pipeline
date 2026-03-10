@@ -20,7 +20,11 @@ import pytest
 from moto import mock_aws
 
 PACKAGE = "depositor"
+MODULE = "depositor"
 
+# Ensure package/module is importable
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", f"{PACKAGE}"))
+test_module = importlib.import_module(MODULE, package=PACKAGE)
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -35,14 +39,8 @@ def _make_context(request_id: str = "test-request-id") -> MagicMock:
 def _reload_handler():
     """Reload the handler module so module-level boto3 clients are re-created
     within the moto mock context."""
-    if "handler" in sys.modules:
-        del sys.modules["handler"]
-    # Add package to path so 'import handler' resolves correctly
-    src_path = os.path.join(os.path.dirname(__file__), "..", f"{PACKAGE}")
-    if src_path not in sys.path:
-        sys.path.insert(0, src_path)
-    import handler as h
-    return h
+    importlib.reload(test_module)
+    return test_module.handler
 
 
 # ---------------------------------------------------------------------------
@@ -76,24 +74,24 @@ class TestHandler(unittest.TestCase):
     # ── Happy path ─────────────────────────────────────────────────────────────
 
     def test_returns_200_on_success(self):
-        result = self.handler.handler({}, _make_context())
+        result = self.handler({}, _make_context())
         assert result["statusCode"] == 200
 
     def test_response_contains_expected_keys(self):
-        result = self.handler.handler({"source": "unit-test"}, _make_context())
+        result = self.handler({"source": "unit-test"}, _make_context())
         for field in ("key", "bucket", "environment", "deposit_id"):
             assert field in result, f"Missing field: {field}"
 
     def test_bucket_name_in_response(self):
-        result = self.handler.handler({}, _make_context())
+        result = self.handler({}, _make_context())
         assert result["bucket"] == self.BUCKET
 
     def test_environment_in_response(self):
-        result = self.handler.handler({}, _make_context())
+        result = self.handler({}, _make_context())
         assert result["environment"] == "test"
 
     def test_object_deposited_in_s3(self):
-        result = self.handler.handler({}, _make_context())
+        result = self.handler({}, _make_context())
         key = result["key"]
         obj = self.s3.get_object(Bucket=self.BUCKET, Key=key)
         body = json.loads(obj["Body"].read())
@@ -102,24 +100,24 @@ class TestHandler(unittest.TestCase):
         assert "timestamp" in body
 
     def test_key_is_under_deposits_prefix(self):
-        result = self.handler.handler({}, _make_context())
+        result = self.handler({}, _make_context())
         assert result["key"].startswith("deposits/")
 
     def test_event_stored_in_body(self):
         event = {"pipeline": "cicd", "run": 42}
-        result = self.handler.handler(event, _make_context())
+        result = self.handler(event, _make_context())
         key = result["key"]
         obj = self.s3.get_object(Bucket=self.BUCKET, Key=key)
         body = json.loads(obj["Body"].read())
         assert body["event"] == event
 
     def test_each_invocation_has_unique_key(self):
-        result1 = self.handler.handler({}, _make_context())
-        result2 = self.handler.handler({}, _make_context())
+        result1 = self.handler({}, _make_context())
+        result2 = self.handler({}, _make_context())
         assert result1["key"] != result2["key"]
 
     def test_s3_object_content_type_is_json(self):
-        result = self.handler.handler({}, _make_context())
+        result = self.handler({}, _make_context())
         head = self.s3.head_object(Bucket=self.BUCKET, Key=result["key"])
         assert head["ContentType"] == "application/json"
 
@@ -128,13 +126,13 @@ class TestHandler(unittest.TestCase):
     def test_raises_if_target_bucket_not_set(self):
         del os.environ["TARGET_BUCKET"]
         with pytest.raises(EnvironmentError, match="TARGET_BUCKET"):
-            self.handler.handler({}, _make_context())
+            self.handler({}, _make_context())
 
     def test_raises_on_s3_client_error(self):
         """Simulate an S3 failure (bucket doesn't exist)."""
         os.environ["TARGET_BUCKET"] = "non-existent-bucket-xyz"
         with pytest.raises(RuntimeError):
-            self.handler.handler({}, _make_context())
+            self.handler({}, _make_context())
 
 
 if __name__ == "__main__":
